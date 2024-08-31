@@ -1,6 +1,50 @@
 # health-assistant
 RAG system dedicated to answering health-related questions based on scientific evidence.
 
+## Project overview
+
+
+## Dataset
+
+
+## Technologies
+
+
+## Preparation
+
+
+## Running the application
+### Database
+
+
+### Docker-compose
+
+
+### Locally (?)
+
+
+### Docker
+
+
+## Using the application
+If API
+### CLI
+
+### requests
+
+### CURL
+
+If GUI
+### Streamlit
+
+
+## Code summary
+
+
+## Experiments
+
+
+## Monitoring
 
 
 
@@ -16,3 +60,4 @@ kaggle datasets download -d jpmiller/layoutlm -f medquad.csv &&
 unzip medquad.csv.zip && 
 rm medquad.csv.zip
 
+3. OpenAI Key
