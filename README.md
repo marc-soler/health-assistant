@@ -61,3 +61,11 @@ unzip medquad.csv.zip &&
 rm medquad.csv.zip
 
 3. OpenAI Key
+
+
+4. Retrieval evaluation
+MinSearch
+
+ElasticSearch
+
+embedding model choice based on performance (from [huggingface](https://huggingface.co/spaces/mteb/leaderboard)), max tokens (5692 longest answer), and dimensions, albeit truncated.

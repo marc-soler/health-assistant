@@ -14,6 +14,11 @@ requests = "^2.32.3"
 psycopg2-binary = "^2.9.9"
 streamlit = "^1.38.0"
 sentence-transformers = "^3.0.1"
+ipykernel = "^6.29.5"
+poetry-dotenv = "^0.4.0"
+elasticsearch = "^8.15.0"
+pinecone-client = "3.2.2"
+tiktoken = "^0.7.0"
 
 
 [build-system]
