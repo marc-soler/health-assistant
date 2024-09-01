@@ -4,7 +4,7 @@
 import pandas as pd
 
 # %%
-df = pd.read_csv("../data/medquad-clean.csv")
+df = pd.read_parquet("../data/medquad-embeddings.parquet")
 documents = df.to_dict(orient="records")
 
 # %%
@@ -48,6 +48,13 @@ es_client.indices.delete(index=index_name, ignore_unavailable=True)
 es_client.indices.create(index=index_name, body=es_text_index_settings)
 
 for doc in tqdm(documents):
+    doc = {
+        "question": doc["question"],
+        "answer": doc["answer"],
+        "source": doc["source"],
+        "focus_area": doc["focus_area"],
+        "id": doc["id"],
+    }
     es_client.index(index=index_name, body=doc)  # type: ignore
 
 # %%
@@ -95,14 +102,19 @@ for doc in tqdm(documents):
 # %%
 ## OPENAI CLIENT
 from openai import OpenAI
+from sentence_transformers import SentenceTransformer
 
 client = OpenAI()
 
+embedding_model = SentenceTransformer(
+    "Alibaba-NLP/gte-large-en-v1.5", trust_remote_code=True
+)
+embedding_model.max_seq_length = 1024
+embedding_model.tokenizer.padding_side = "right"
+
+
 # %%
 ## SEARCH FUNCTIONS
-from typing import Dict
-
-
 def search_minsearch(query: str):
     boost = {}
 
@@ -131,27 +143,19 @@ def search_elasticsearch_text(query: str):
     return [i["_source"] for i in results_es["hits"]["hits"]]
 
 
-def search_elasticsearch_vector(query, vector):
-    vector = (
-        client.embeddings.create(
-            input=[query], model="text-embedding-3-small", dimensions=1024
-        )
-        .data[0]
-        .embedding
-    )
-    knn = {
+def search_elasticsearch_vector(query: str):
+    vector = [t.tolist() for t in embedding_model.encode(query)]
+    search_query = {
         "field": "question_answer_vector",
         "query_vector": vector,
         "k": 5,
-        "num_candidates": 15000,
+        "num_candidates": 10000,
     }
 
-    search_query = {
-        "knn": knn,
-        "_source": ["question", "answer", "source", "focus_area", "id"],
-    }
-
-    es_results = es_client.search(index="health-questions-vector", body=search_query)
+    es_results = es_client.search(
+        index="health-questions-vector",
+        knn=search_query,
+    )
 
     return [hit["_source"] for hit in es_results["hits"]["hits"]]
 
@@ -212,7 +216,7 @@ print(answer)
 
 # %%
 # RETRIEVAL EVALUATION
-ground_truth_df = pd.read_csv("../data/ground-truth-retrieval.csv")
+ground_truth_df = pd.read_parquet("../data/ground-truth-retrieval.parquet")
 ground_truth = ground_truth_df.to_dict(orient="records")
 
 

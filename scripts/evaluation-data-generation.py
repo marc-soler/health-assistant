@@ -5,7 +5,7 @@ from openai import OpenAI
 client = OpenAI()
 
 # %%
-df = pd.read_csv("../data/medquad-clean.csv")
+df = pd.read_parquet("../data/medquad-clean.parquet")
 documents = df.to_dict(orient="records")
 
 # %%
@@ -101,4 +101,4 @@ for doc_id, questions in results.items():
 df_results = pd.DataFrame(final_results, columns=["id", "question"])
 
 # %%
-df_results.to_csv("../data/ground-truth-retrieval.csv", index=False)
+df_results.to_parquet("../data/ground-truth-retrieval.parquet", index=False)
