@@ -1,18 +1,19 @@
 # %%
-# INGESTION
+# RETRIEVAL EVALUATION
 # %%
+## DATA INGESTION
 import pandas as pd
 
-# %%
 df = pd.read_parquet("../data/medquad-embeddings.parquet")
 documents = df.to_dict(orient="records")
+ground_truth_df = pd.read_parquet("../data/ground-truth-retrieval.parquet")
+ground_truth = ground_truth_df.to_dict(orient="records")
 
 # %%
-## MINSEARCH
+### MINSEARCH
 # !wget https://raw.githubusercontent.com/alexeygrigorev/minsearch/main/minsearch.py
 import minsearch
 
-# %%
 minsearch_index = minsearch.Index(
     text_fields=["question", "answer", "source", "focus_area"],
     keyword_fields=["id"],
@@ -21,15 +22,14 @@ minsearch_index = minsearch.Index(
 minsearch_index.fit(documents)
 
 # %%
-## ELASTICSEARCH
+### ELASTICSEARCH
 import elasticsearch
+from tqdm.auto import tqdm
 
 es_client = elasticsearch.Elasticsearch("http://localhost:9200")
 
 # %%
-from tqdm.auto import tqdm
-
-### TEXT INDEX
+#### TEXT INDEX
 es_text_index_settings = {
     "settings": {"number_of_shards": 1, "number_of_replicas": 0},
     "mappings": {
@@ -58,7 +58,7 @@ for doc in tqdm(documents):
     es_client.index(index=index_name, body=doc)  # type: ignore
 
 # %%
-### VECTOR INDEX
+#### VECTOR INDEX
 es_vector_index_settings = {
     "settings": {"number_of_shards": 1, "number_of_replicas": 0},
     "mappings": {
@@ -98,9 +98,7 @@ for doc in tqdm(documents):
     es_client.index(index=index_name, body=doc)  # type: ignore
 
 # %%
-# RAG FLOW
-# %%
-## OPENAI CLIENT
+## OPENAI + SENTENCE TRANSFORMER
 from openai import OpenAI
 from sentence_transformers import SentenceTransformer
 
@@ -161,66 +159,7 @@ def search_elasticsearch_vector(query: str):
 
 
 # %%
-## PROMPT BUILDER
-prompt_template = """
-You're a health professional. Answer the QUESTION based on the CONTEXT from our exercises database.
-Use only the facts from the CONTEXT when answering the QUESTION.
-
-QUESTION: {question}
-
-CONTEXT:
-{context}
-""".strip()
-
-entry_template = """
-question: {question}
-answer: {answer}
-source: {source}
-focus_area: {focus_area}
-""".strip()
-
-
-def build_prompt(query, search_results):
-    context = ""
-
-    for doc in search_results:
-        context = context + entry_template.format(**doc) + "\n\n"
-
-    prompt = prompt_template.format(question=query, context=context).strip()
-    return prompt
-
-
-# %%
-## LLM ANSWER
-def llm(prompt, model="gpt-4o-mini"):
-    response = client.chat.completions.create(
-        model=model, messages=[{"role": "user", "content": prompt}]
-    )
-
-    return response.choices[0].message.content
-
-
-# %%
-## RAG FLOW
-def rag(query, search_function, model="gpt-4o-mini"):
-    search_results = search_function(query)
-    prompt = build_prompt(query, search_results)
-    answer = llm(prompt, model=model)
-    return answer
-
-
-# %%
-question = "A new mole has appeared in my skin. What can this mean?"
-answer = rag(question, search_elasticsearch_vector)
-print(answer)
-
-# %%
-# RETRIEVAL EVALUATION
-ground_truth_df = pd.read_parquet("../data/ground-truth-retrieval.parquet")
-ground_truth = ground_truth_df.to_dict(orient="records")
-
-
-# %%
+## METRICS
 def hit_rate(relevance_total):
     cnt = 0
 
@@ -243,17 +182,7 @@ def mrr(relevance_total):
 
 
 # %%
-def minsearch_search(query):
-    boost = {}
-
-    results = minsearch_index.search(
-        query=query, filter_dict={}, boost_dict=boost, num_results=10
-    )
-
-    return results
-
-
-# %%
+## EVALUATION FUNCTION
 def evaluate(ground_truth, search_function):
     relevance_total = []
 
@@ -273,19 +202,96 @@ def evaluate(ground_truth, search_function):
 ## RESULTS
 # %%
 ### MINSEARCH
-minsearch_results = evaluate(ground_truth, lambda q: minsearch_search(q["question"]))
+minsearch_results = evaluate(ground_truth, lambda q: search_minsearch(q["question"]))
+print(minsearch_results)
 # {'hit_rate': 0.8276, 'mrr': 0.47836746031746097}
 
 # %%
 ### ELASTICSEARCH - TEXT
-elasticsearch_results = evaluate(
+elasticsearch_text_results = evaluate(
     ground_truth,
     lambda q: search_elasticsearch_text(q["question"]),
 )
+print(elasticsearch_text_results)
+# {'hit_rate': 0.8064, 'mrr': 0.6198600000000003}
 
 # %%
 ### ELASTICSEARCH - VECTOR
-elasticsearch_results = evaluate(
+elasticsearch_vector_results = evaluate(
     ground_truth,
-    lambda q: search_elasticsearch_vector(q["question"], q["question_vector"]),
+    lambda q: search_elasticsearch_vector(q["question"]),
 )
+print(elasticsearch_vector_results)
+# {'hit_rate': 0.9184, 'mrr': 0.7592866666666654}
+
+
+# %%
+## QUERY OPTIMIZATION FOR ELASTICSEARCH VECTOR
+# %%
+### HNSW
+es_vector_hnsw_index_settings = {
+    "settings": {"number_of_shards": 1, "number_of_replicas": 0},
+    "mappings": {
+        "properties": {
+            "question": {"type": "text"},
+            "answer": {"type": "text"},
+            "source": {"type": "keyword"},
+            "focus_area": {"type": "keyword"},
+            "id": {"type": "keyword"},
+            "question_vector": {
+                "type": "dense_vector",
+                "dims": 1024,
+                "index": True,
+                "similarity": "cosine",
+                "index_options": {"type": "hnsw", "m": 16, "ef_construction": 100},
+            },
+            "answer_vector": {
+                "type": "dense_vector",
+                "dims": 1024,
+                "index": True,
+                "similarity": "cosine",
+                "index_options": {"type": "hnsw", "m": 16, "ef_construction": 100},
+            },
+            "question_answer_vector": {
+                "type": "dense_vector",
+                "dims": 1024,
+                "index": True,
+                "similarity": "cosine",
+                "index_options": {"type": "hnsw", "m": 16, "ef_construction": 100},
+            },
+        }
+    },
+}
+index_name = "health-questions-vector-hnsw"
+
+es_client.indices.delete(index=index_name, ignore_unavailable=True)
+es_client.indices.create(index=index_name, body=es_vector_hnsw_index_settings)
+
+for doc in tqdm(documents):
+    es_client.index(index=index_name, body=doc)  # type: ignore
+
+
+# %%
+def search_elasticsearch_vector_hnsw(query: str):
+    vector = [t.tolist() for t in embedding_model.encode(query)]
+    search_query = {
+        "field": "question_answer_vector",
+        "query_vector": vector,
+        "k": 5,
+        "num_candidates": 10000,
+    }
+
+    es_results = es_client.search(
+        index="health-questions-vector-hnsw",
+        knn=search_query,
+    )
+
+    return [hit["_source"] for hit in es_results["hits"]["hits"]]
+
+
+elasticsearch_vector_hnsw_results = evaluate(
+    ground_truth,
+    lambda q: search_elasticsearch_vector_hnsw(q["question"]),
+)
+print(elasticsearch_vector_hnsw_results)
+# {'hit_rate': 0.9184, 'mrr': 0.7593199999999987}
