@@ -1,24 +1,8 @@
 # %%
 import pandas as pd
 
-df = pd.read_csv("../data/medquad-clean.csv")
+df = pd.read_parquet("../data/medquad-clean.parquet")
 docs = df.to_dict(orient="records")
-
-# %%
-# FROM OPENAI
-from openai import OpenAI
-
-client = OpenAI()
-
-
-def get_embedding(text: str, model: str = "text-embedding-3-small"):
-    text = text.replace("\n", " ")
-    return (
-        client.embeddings.create(input=[text], model=model, dimensions=1024)
-        .data[0]
-        .embedding
-    )
-
 
 # %%
 # MAX TOKENS IN ANSWERS
@@ -66,9 +50,9 @@ def process_doc(doc):
     # Return the result so we can update docs later
     return {
         "id": doc["id"],
-        "question_vector": question_vector,
-        "answer_vector": answer_vector,
-        "question_answer_vector": question_answer_vector,
+        "question_vector": question_vector.tolist(),  # type: ignore
+        "answer_vector": answer_vector.tolist(),  # type: ignore
+        "question_answer_vector": question_answer_vector.tolist(),  # type: ignore
     }
 
 
@@ -92,4 +76,4 @@ with ThreadPoolExecutor(max_workers=num_threads) as executor:
 # %%
 # SAVE TO CSV
 df = pd.DataFrame(docs)
-df.to_csv("../data/medquad-embeddings.csv", index=False)
+df.to_parquet("../data/medquad-embeddings.parquet", index=False)

@@ -27,6 +27,8 @@ import elasticsearch
 es_client = elasticsearch.Elasticsearch("http://localhost:9200")
 
 # %%
+from tqdm.auto import tqdm
+
 ### TEXT INDEX
 es_text_index_settings = {
     "settings": {"number_of_shards": 1, "number_of_replicas": 0},
@@ -45,7 +47,7 @@ index_name = "health-questions-text"
 es_client.indices.delete(index=index_name, ignore_unavailable=True)
 es_client.indices.create(index=index_name, body=es_text_index_settings)
 
-for doc in documents:
+for doc in tqdm(documents):
     es_client.index(index=index_name, body=doc)  # type: ignore
 
 # %%
@@ -73,8 +75,8 @@ es_vector_index_settings = {
             },
             "question_answer_vector": {
                 "type": "dense_vector",
-                "dims": 384,
-                "index": 1024,
+                "dims": 1024,
+                "index": True,
                 "similarity": "cosine",
             },
         }
@@ -85,8 +87,8 @@ index_name = "health-questions-vector"
 es_client.indices.delete(index=index_name, ignore_unavailable=True)
 es_client.indices.create(index=index_name, body=es_vector_index_settings)
 
-# for doc in documents_vectors:
-#     es_client.index(index=index_name, body=doc)
+for doc in tqdm(documents):
+    es_client.index(index=index_name, body=doc)  # type: ignore
 
 # %%
 # RAG FLOW
@@ -205,12 +207,12 @@ def rag(query, search_function, model="gpt-4o-mini"):
 
 # %%
 question = "A new mole has appeared in my skin. What can this mean?"
-answer = rag(question, search_elasticsearch_text)
+answer = rag(question, search_elasticsearch_vector)
 print(answer)
 
 # %%
 # RETRIEVAL EVALUATION
-ground_truth_df = pd.read_csv("../data/ground-truth.csv")
+ground_truth_df = pd.read_csv("../data/ground-truth-retrieval.csv")
 ground_truth = ground_truth_df.to_dict(orient="records")
 
 
@@ -237,9 +239,6 @@ def mrr(relevance_total):
 
 
 # %%
-from tqdm.auto import tqdm
-
-
 def minsearch_search(query):
     boost = {}
 
@@ -250,6 +249,7 @@ def minsearch_search(query):
     return results
 
 
+# %%
 def evaluate(ground_truth, search_function):
     relevance_total = []
 
@@ -267,4 +267,21 @@ def evaluate(ground_truth, search_function):
 
 # %%
 ## RESULTS
-misnearch_results = evaluate(ground_truth, lambda q: minsearch_search(q["question"]))
+# %%
+### MINSEARCH
+minsearch_results = evaluate(ground_truth, lambda q: minsearch_search(q["question"]))
+# {'hit_rate': 0.8276, 'mrr': 0.47836746031746097}
+
+# %%
+### ELASTICSEARCH - TEXT
+elasticsearch_results = evaluate(
+    ground_truth,
+    lambda q: search_elasticsearch_text(q["question"]),
+)
+
+# %%
+### ELASTICSEARCH - VECTOR
+elasticsearch_results = evaluate(
+    ground_truth,
+    lambda q: search_elasticsearch_vector(q["question"], q["question_vector"]),
+)

@@ -68,4 +68,4 @@ MinSearch
 
 ElasticSearch
 
-embedding model choice based on performance (from [huggingface](https://huggingface.co/spaces/mteb/leaderboard)), max tokens (5692 longest answer), and dimensions, albeit truncated.
+embedding model choice based on performance (from [huggingface](https://huggingface.co/spaces/mteb/leaderboard)), max tokens (5692 longest answer), and dimensions, albeit truncated. [Sentence transformer](https://huggingface.co/Alibaba-NLP/gte-large-en-v1.5)
