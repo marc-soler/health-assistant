@@ -1,7 +1,7 @@
 # %%
 import pandas as pd
 
-df = pd.read_parquet("../data/medquad-clean.parquet")
+df = pd.read_parquet("../data/medquad_clean.parquet")
 docs = df.to_dict(orient="records")
 
 # %%
@@ -76,4 +76,4 @@ with ThreadPoolExecutor(max_workers=num_threads) as executor:
 # %%
 # SAVE TO CSV
 df = pd.DataFrame(docs)
-df.to_parquet("../data/medquad-embeddings.parquet", index=False)
+df.to_parquet("../data/medquad_embeddings.parquet", index=False)

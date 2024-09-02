@@ -9,4 +9,4 @@ df = df.dropna().reset_index(drop=True)
 df = df.reset_index().rename(columns={"index": "id"})
 
 # %%
-df.to_parquet("../data/medquad-clean.parquet", index=False)
+df.to_parquet("../data/medquad_clean.parquet", index=False)

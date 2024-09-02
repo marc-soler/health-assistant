@@ -2,7 +2,7 @@
 # DATA INGESTION
 import pandas as pd
 
-df = pd.read_parquet("../data/medquad-embeddings.parquet")
+df = pd.read_parquet("../data/medquad_embeddings.parquet")
 documents = df.to_dict(orient="records")
 
 # %%
@@ -233,7 +233,7 @@ print(answer)
 # %%
 # RAG EVALUATION
 # %%
-ground_truth_df = pd.read_parquet("../data/ground-truth-retrieval.parquet")
+ground_truth_df = pd.read_parquet("../data/ground_truth_retrieval.parquet")
 ground_truth = ground_truth_df.to_dict(orient="records")
 
 # %%
@@ -342,7 +342,7 @@ df_eval_v1_q_a_a[df_eval_v1_q_a_a.relevance == "NON_RELEVANT"]
 
 # %%
 df_eval_v1_q_a_a.to_parquet(
-    "../data/rag-eval-gpt-4o-mini-prompt1-a-q-a.parquet", index=False
+    "../data/rag_eval_gpt_4o_mini_prompt1_a_q_a.parquet", index=False
 )
 
 # %%
@@ -356,7 +356,7 @@ df_eval_v1_q_a[df_eval_v1_q_a.relevance == "NON_RELEVANT"]
 
 # %%
 df_eval_v1_q_a.to_parquet(
-    "../data/rag-eval-gpt-4o-mini-prompt1-a-q.parquet", index=False
+    "../data/rag_eval_gpt_4o_mini_prompt1_a_q.parquet", index=False
 )
 
 # %%
@@ -411,7 +411,7 @@ df_eval_v2_q_a_a[df_eval_v2_q_a_a.relevance == "NON_RELEVANT"]
 
 # %%
 df_eval_v2_q_a_a.to_parquet(
-    "../data/rag-eval-gpt-4o-mini-prompt2-a-q-a.parquet", index=False
+    "../data/rag_eval_gpt_4o_mini_prompt2_a_q_a.parquet", index=False
 )
 
 # %%
@@ -432,5 +432,5 @@ df_eval_v2_q_a[df_eval_v2_q_a.relevance == "NON_RELEVANT"]
 
 # %%
 df_eval_v2_q_a.to_parquet(
-    "../data/rag-eval-gpt-4o-mini-prompt2-a-q.parquet", index=False
+    "../data/rag_eval_gpt_4o_mini_prompt2_a_q.parquet", index=False
 )

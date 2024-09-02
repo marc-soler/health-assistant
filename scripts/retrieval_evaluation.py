@@ -4,9 +4,9 @@
 ## DATA INGESTION
 import pandas as pd
 
-df = pd.read_parquet("../data/medquad-embeddings.parquet")
+df = pd.read_parquet("../data/medquad_embeddings.parquet")
 documents = df.to_dict(orient="records")
-ground_truth_df = pd.read_parquet("../data/ground-truth-retrieval.parquet")
+ground_truth_df = pd.read_parquet("../data/ground_truth_retrieval.parquet")
 ground_truth = ground_truth_df.to_dict(orient="records")
 
 # %%

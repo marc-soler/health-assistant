@@ -11,13 +11,26 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.4.3
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - allocation.disk.threshold_enabled=false
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/var/lib/elasticsearch/data
+
   app:
     build:
       context: .
       dockerfile: Dockerfile
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      DATA_PATH: "data/medquad.csv"
+      DATA_PATH: ${DATA_PATH:-data/medquad_embeddings.parquet}
     ports:
       - "${APP_PORT:-5000}:5000"
     depends_on:
@@ -45,4 +58,5 @@ services:
 
 volumes:
   postgres_data:
+  elasticsearch_data:
   grafana_data:
