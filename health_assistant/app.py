@@ -4,6 +4,7 @@ from prompt_builder import PromptBuilder
 import prompt_templates as templates
 from health_assistant.search_service import SearchService
 from llm_service import LLMService
+from response_evaluator import ResponseEvaluator
 
 
 if __name__ == "__main__":
@@ -31,3 +32,10 @@ if __name__ == "__main__":
     llm_service = LLMService()
     llm_service.connect_to_llm()
     response = llm_service.query_llm(prompt=question_prompt)
+
+    evaluator = ResponseEvaluator(
+        llm_service=llm_service, prompt_builder=evaliuation_prompt_builder
+    )
+    question = "What are the side effects of taking aspirin?"
+    answer = "The common side effects of aspirin include nausea, vomiting, stomach pain, and dizziness."
+    evaluation_result, token_stats = evaluator.evaluate_relevance(question, answer)
