@@ -3,6 +3,7 @@ from elasticsearch_indexer import ElasticsearchIndexer
 from prompt_builder import PromptBuilder
 import prompt_templates as templates
 from health_assistant.search_service import SearchService
+from llm_service import LLMService
 
 
 if __name__ == "__main__":
@@ -26,3 +27,7 @@ if __name__ == "__main__":
     results = search_service.search(
         query="What are the side effects of hypertension medication?"
     )
+
+    llm_service = LLMService()
+    llm_service.connect_to_llm()
+    response = llm_service.query_llm(prompt=question_prompt)
