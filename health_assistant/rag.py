@@ -1,84 +1,139 @@
 import json
-
 from time import time
-
+import logging
+from logging.config import dictConfig
+import sys
 from openai import OpenAI
-
-import elasticsearch_indexer
-
-
-client = OpenAI()
-index = ingest.load_index()
+from elasticsearch_indexer import ElasticsearchIndexer
+from sentence_transformers import SentenceTransformer
 
 
-def search(query):
-    boost = {
-        "exercise_name": 2.11,
-        "type_of_activity": 1.46,
-        "type_of_equipment": 0.65,
-        "body_part": 2.65,
-        "type": 1.31,
-        "muscle_groups_activated": 2.54,
-        "instructions": 0.74,
+def setup_logging():
+    logging_config = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "default": {
+                "format": "%(asctime)s %(levelname)s %(message)s",
+            },
+            "json": {
+                "format": '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "message": "%(message)s"}',
+            },
+        },
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "stream": sys.stdout,
+                "formatter": "json",  # Change to 'default' if not using JSON
+            },
+            "error_console": {
+                "class": "logging.StreamHandler",
+                "stream": sys.stderr,
+                "formatter": "json",  # Change to 'default' if not using JSON
+            },
+        },
+        "root": {
+            "level": "INFO",
+            "handlers": ["console", "error_console"],
+        },
+        "loggers": {
+            "__main__": {
+                "level": "INFO",
+                "handlers": ["console"],
+                "propagate": False,
+            },
+        },
+    }
+    dictConfig(logging_config)
+
+
+setup_logging()
+logger = logging.getLogger(__name__)
+
+indexer = ElasticsearchIndexer()
+es_client, index_name = indexer.load_and_index_data()
+
+embedding_model = SentenceTransformer(
+    "Alibaba-NLP/gte-large-en-v1.5", trust_remote_code=True
+)
+embedding_model.max_seq_length = 1024
+embedding_model.tokenizer.padding_side = "right"
+openai_client = OpenAI()
+
+
+def search_elasticsearch(query: str):
+    vector = [t.tolist() for t in embedding_model.encode(query)]
+    search_query = {
+        "field": "question_answer_vector",
+        "query_vector": vector,
+        "k": 5,
+        "num_candidates": 10000,
     }
 
-    results = index.search(
-        query=query, filter_dict={}, boost_dict=boost, num_results=10
+    es_results = es_client.search(
+        index="health-questions-vector",
+        knn=search_query,
     )
 
-    return results
+    return [hit["_source"] for hit in es_results["hits"]["hits"]]
 
 
-prompt_template = """
-You're a fitness insrtuctor. Answer the QUESTION based on the CONTEXT from our exercises database.
-Use only the facts from the CONTEXT when answering the QUESTION.
+question_prompt_template = """
+Role: You are a knowledgeable and experienced health professional.
+
+Task: Provide a clear and concise answer to the QUESTION using only the information provided in the CONTEXT. Do not include any information outside of what is given.
+
+Instructions:
+- Base your answer strictly on the CONTEXT provided.
+- If the CONTEXT does not contain sufficient information to fully answer the QUESTION, explicitly state that based on the CONTEXT.
+- Maintain a professional tone and ensure the information is medically accurate.
 
 QUESTION: {question}
 
 CONTEXT:
-{context}
-""".strip()
-
-
-entry_template = """
-exercise_name: {exercise_name}
-type_of_activity: {type_of_activity}
-type_of_equipment: {type_of_equipment}
-body_part: {body_part}
-type: {type}
-muscle_groups_activated: {muscle_groups_activated}
-instructions: {instructions}
+- Answers from Medical Databases:
+{answer}
+- Focus Areas:
+{focus_area}
+- Sources:
+{source}
 """.strip()
 
 
 def build_prompt(query, search_results):
-    context = ""
+    answer = ""
+    focus_area = ""
+    source = ""
 
     for doc in search_results:
-        context = context + entry_template.format(**doc) + "\n\n"
+        answer += doc["answer"] + "\n\n"
+        focus_area += doc["focus_area"] + "\n\n"
+        source += doc["source"] + "\n\n"
 
-    prompt = prompt_template.format(question=query, context=context).strip()
+    prompt = question_prompt_template.format(
+        question=query, answer=answer, focus_area=focus_area, source=source
+    ).strip()
     return prompt
 
 
 def llm(prompt, model="gpt-4o-mini"):
-    response = client.chat.completions.create(
+    response = openai_client.chat.completions.create(
         model=model, messages=[{"role": "user", "content": prompt}]
     )
 
     answer = response.choices[0].message.content
 
     token_stats = {
-        "prompt_tokens": response.usage.prompt_tokens,
-        "completion_tokens": response.usage.completion_tokens,
-        "total_tokens": response.usage.total_tokens,
+        "prompt_tokens": response.usage.prompt_tokens,  # type: ignore
+        "completion_tokens": response.usage.completion_tokens,  # type: ignore
+        "total_tokens": response.usage.total_tokens,  # type: ignore
     }
 
     return answer, token_stats
 
 
 evaluation_prompt_template = """
-You are an expert evaluator for a RAG system.
+You are an expert evaluator for a Retrieval-Augmented Generation (RAG) system.
 Your task is to analyze the relevance of the generated answer to the given question.
 Based on the relevance of the generated answer, you will classify it
 as "NON_RELEVANT", "PARTLY_RELEVANT", or "RELEVANT".
@@ -86,7 +141,7 @@ as "NON_RELEVANT", "PARTLY_RELEVANT", or "RELEVANT".
 Here is the data for evaluation:
 
 Question: {question}
-Generated Answer: {answer}
+Generated Answer: {answer_llm}
 
 Please analyze the content and context of the generated answer in relation to the question
 and provide your evaluation in parsable JSON without using code blocks:
@@ -102,11 +157,18 @@ def evaluate_relevance(question, answer):
     prompt = evaluation_prompt_template.format(question=question, answer=answer)
     evaluation, tokens = llm(prompt, model="gpt-4o-mini")
 
-    try:
-        json_eval = json.loads(evaluation)
-        return json_eval, tokens
-    except json.JSONDecodeError:
-        result = {"Relevance": "UNKNOWN", "Explanation": "Failed to parse evaluation"}
+    if evaluation is not None:
+        try:
+            json_eval = json.loads(evaluation)
+            return json_eval, tokens
+        except json.JSONDecodeError:
+            result = {
+                "Relevance": "UNKNOWN",
+                "Explanation": "Failed to parse evaluation",
+            }
+            return result, tokens
+    else:
+        result = {"Relevance": "UNKNOWN", "Explanation": "No evaluation received"}
         return result, tokens
 
 
@@ -126,7 +188,7 @@ def calculate_openai_cost(model, tokens):
 def rag(query, model="gpt-4o-mini"):
     t0 = time()
 
-    search_results = search(query)
+    search_results = search_elasticsearch(query)
     prompt = build_prompt(query, search_results)
     answer, token_stats = llm(prompt, model=model)
 
