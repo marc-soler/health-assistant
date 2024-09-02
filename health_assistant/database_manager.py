@@ -1,8 +1,9 @@
 # Refactoring the functional code to an OOP structure
 import os
+import logging
 import psycopg2
 from psycopg2.extras import DictCursor
-from datetime import datetime, timezone
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 RUN_TIMEZONE_CHECK = os.getenv("RUN_TIMEZONE_CHECK", "1") == "1"
@@ -26,17 +27,28 @@ class DatabaseManager:
         self._password = password or os.getenv("POSTGRES_PASSWORD", "your_password")
         self._tz = ZoneInfo(tz_info or os.getenv("TZ", "Europe/Berlin"))
         self._conn = self._get_db_connection()
+        self.logger = logging.getLogger(__name__)
+
+        self.logger.info(
+            f"DatabaseManager initialized with DB: {self._database}, Host: {self._host}"
+        )
 
     def _get_db_connection(self):
         """
         Establishes a connection to the PostgreSQL database.
         """
-        return psycopg2.connect(
-            host=self._host,
-            database=self._database,
-            user=self._user,
-            password=self._password,
-        )
+        try:
+            conn = psycopg2.connect(
+                host=self._host,
+                database=self._database,
+                user=self._user,
+                password=self._password,
+            )
+            self.logger.info("Successfully connected to the PostgreSQL database.")
+            return conn
+        except Exception as e:
+            self.logger.error(f"Failed to connect to the PostgreSQL database: {e}")
+            raise
 
     def init_db(self):
         """
@@ -46,6 +58,7 @@ class DatabaseManager:
             with self._conn.cursor() as cur:
                 cur.execute("DROP TABLE IF EXISTS feedback")
                 cur.execute("DROP TABLE IF EXISTS conversations")
+                self.logger.info("Dropped existing tables if they existed.")
 
                 cur.execute(
                     """
@@ -80,11 +93,14 @@ class DatabaseManager:
                     """
                 )
             self._conn.commit()
+            self.logger.info("Database initialized successfully.")
         except Exception as e:
             self._conn.rollback()
-            raise e
+            self.logger.error(f"Failed to initialize the database: {e}")
+            raise
         finally:
             self._conn.close()
+            self.logger.info("Database connection closed.")
 
     def save_conversation(self, conversation_id, question, answer, timestamp=None):
         """
@@ -121,11 +137,16 @@ class DatabaseManager:
                     ),
                 )
             self._conn.commit()
+            self.logger.info(f"Saved conversation with ID: {conversation_id}.")
         except Exception as e:
             self._conn.rollback()
-            raise e
+            self.logger.error(
+                f"Failed to save conversation with ID: {conversation_id}. Error: {e}"
+            )
+            raise
         finally:
             self._conn.close()
+            self.logger.info("Database connection closed after saving conversation.")
 
     def save_feedback(self, conversation_id, feedback, timestamp=None):
         """
@@ -140,11 +161,16 @@ class DatabaseManager:
                     (conversation_id, feedback, timestamp),
                 )
             self._conn.commit()
+            self.logger.info(f"Saved feedback for conversation ID: {conversation_id}.")
         except Exception as e:
             self._conn.rollback()
-            raise e
+            self.logger.error(
+                f"Failed to save feedback for conversation ID: {conversation_id}. Error: {e}"
+            )
+            raise
         finally:
             self._conn.close()
+            self.logger.info("Database connection closed after saving feedback.")
 
     def get_recent_conversations(self, limit=10, relevance=None):
         """
@@ -162,11 +188,17 @@ class DatabaseManager:
                     query += " ORDER BY c.timestamp DESC LIMIT %s"
 
                 cur.execute(query, (limit,))
-                return cur.fetchall()
+                results = cur.fetchall()
+                self.logger.info(f"Retrieved {len(results)} recent conversations.")
+                return results
         except Exception as e:
-            raise e
+            self.logger.error(f"Failed to retrieve recent conversations. Error: {e}")
+            raise
         finally:
             self._conn.close()
+            self.logger.info(
+                "Database connection closed after retrieving recent conversations."
+            )
 
     def get_feedback_stats(self):
         """
@@ -182,11 +214,17 @@ class DatabaseManager:
                     FROM feedback
                     """
                 )
-            return cur.fetchone()
+            stats = cur.fetchone()
+            self.logger.info("Retrieved feedback statistics.")
+            return stats
         except Exception as e:
-            raise e
+            self.logger.error(f"Failed to retrieve feedback statistics. Error: {e}")
+            raise
         finally:
             self._conn.close()
+            self.logger.info(
+                "Database connection closed after retrieving feedback statistics."
+            )
 
     def check_timezone(self):
         """
@@ -198,22 +236,22 @@ class DatabaseManager:
             db_timezone = cur.fetchone()
             if db_timezone:
                 db_timezone = db_timezone[0]
-                print(f"Database timezone: {db_timezone}")
+                self.logger.info(f"Database timezone: {db_timezone}")
             else:
-                print("No timezone found")
+                self.logger.warning("No timezone found")
 
             db_time_utc = cur.fetchone()
             if db_time_utc:
                 db_time_utc = db_time_utc[0]
-                print(f"Database current time (UTC): {db_time_utc}")
+                self.logger.info(f"Database current time (UTC): {db_time_utc}")
             else:
-                print("No current time found")
+                self.logger.warning("No current time found")
 
             db_time_local = db_time_utc.astimezone(tz)  # type: ignore
-            print(f"Database current time ({self._tz}): {db_time_local}")
+            self.logger.info(f"Database current time ({self._tz}): {db_time_local}")
 
             py_time = datetime.now(self._tz)
-            print(f"Python current time: {py_time}")
+            self.logger.info(f"Python current time: {py_time}")
 
             # Use py_time instead of tz for insertion
             cur.execute(
@@ -247,31 +285,34 @@ class DatabaseManager:
             inserted_time = cur.fetchone()
             if inserted_time:
                 inserted_time = inserted_time[0]
-                print(f"Inserted time (UTC): {inserted_time}")
-                print(
+                self.logger.info(f"Inserted time (UTC): {inserted_time}")
+                self.logger.info(
                     f"Inserted time ({self._tz}): {inserted_time.astimezone(self._tz)}"
                 )
             else:
-                print("No inserted time found")
+                self.logger.warning("No inserted time found")
 
             cur.execute("SELECT timestamp FROM conversations WHERE id = 'test';")
             selected_time = cur.fetchone()
             if selected_time:
                 selected_time = selected_time[0]
-                print(f"Selected time (UTC): {selected_time}")
-                print(
+                self.logger.info(f"Selected time (UTC): {selected_time}")
+                self.logger.info(
                     f"Selected time ({self._tz}): {selected_time.astimezone(self._tz)}"
                 )
             else:
-                print("No selected time found")
+                self.logger.warning("No selected time found")
 
             # Clean up the test entry
             cur.execute("DELETE FROM conversations WHERE id = 'test';")
             self._conn.commit()
+            self.logger.info("Test entry cleaned up successfully.")
         except Exception as e:
-            raise e
+            self.logger.error(f"An error occurred while checking the timezone: {e}")
+            raise
         finally:
             self._conn.close()
+            self.logger.info("Database connection closed after timezone check.")
 
     def close_connection(self):
         """

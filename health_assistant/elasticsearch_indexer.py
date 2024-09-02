@@ -3,8 +3,6 @@ import logging
 import pandas as pd
 import elasticsearch
 
-logger = logging.getLogger(__name__)
-
 
 class ElasticsearchIndexer:
     def __init__(self, data_path=None, es_host="http://localhost:9200"):
@@ -76,6 +74,7 @@ class ElasticsearchIndexer:
             )
             self.logger.info(f"Created Elasticsearch index: {self.index_name}")
         except Exception as e:
+            self.es_client.close()
             self.logger.error(f"Failed to create index {self.index_name}: {e}")
             raise RuntimeError(f"Failed to create index {self.index_name}: {e}")
 
@@ -96,4 +95,5 @@ class ElasticsearchIndexer:
         documents = self.load_data()
         self.create_index()
         self.index_documents(documents)
+        self.es_client.close()
         return self.es_client, self.index_name
