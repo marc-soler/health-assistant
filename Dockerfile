@@ -17,10 +17,10 @@ COPY health_assistant .
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-EXPOSE 5000
+EXPOSE 8501
 
 # Set the entrypoint
 ENTRYPOINT ["/entrypoint.sh"]
 
 # Default command to run the application
-CMD ["poetry", "run", "gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+CMD ["poetry", "run", "streamlit", "run", "health_assistant/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
