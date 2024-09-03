@@ -13,6 +13,33 @@ class PromptBuilder:
         """
         self.template = template or "Context: {context}\nQuestion: {question}\nAnswer:"
 
+    def create_prompt_context(self, search_results):
+        """
+        Creates a context from search results to be used in the prompt.
+
+        Args:
+            search_results (list of dict): A list of dictionaries containing search results.
+                                        Each dictionary should have keys 'answer', 'focus_area', and 'source'.
+
+        Returns:
+            dict: A dictionary containing the concatenated 'answer', 'focus_area', and 'source' from the search results.
+                The keys of the dictionary are 'answer', 'focus_area', and 'source'.
+        """
+        answer = ""
+        focus_area = ""
+        source = ""
+
+        for doc in search_results:
+            answer += doc["answer"] + "\n\n"
+            focus_area += doc["focus_area"] + "\n\n"
+            source += doc["source"] + "\n\n"
+
+        return {
+            "answer": answer.strip(),
+            "focus_area": focus_area.strip(),
+            "source": source.strip(),
+        }
+
     def build_prompt(self, **kwargs):
         """
         Constructs a prompt based on the provided keyword arguments, matching the fields in the template.

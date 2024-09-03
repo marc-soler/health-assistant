@@ -12,11 +12,10 @@ question = st.text_input("Enter your health-related question:")
 
 if st.button("Get Answer"):
     if question:
-        context = "The patient is a 45-year-old male with a history of hypertension."
 
         # Run the main orchestration process
         conversation_id, response, evaluation_result, cost = main_orchestrator.run(
-            context=context, question=question
+            question=question
         )
 
         # Display LLM response
