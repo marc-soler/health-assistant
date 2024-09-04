@@ -7,8 +7,8 @@ class CostCalculator:
     Specifically, it calculates the cost for the 'gpt-4o-mini' model.
     """
 
-    def __init__(self):
-        self.logger = logging.getLogger(__name__)
+    def __init__(self, logger=None):
+        self.logger = logger if logger is not None else logging.getLogger(__name__)
 
     def calculate_openai_cost(self, tokens):
         """

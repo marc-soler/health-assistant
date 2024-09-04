@@ -11,6 +11,7 @@ class SearchService:
 
     def __init__(
         self,
+        logger=None,
         es_client=None,
         index_name="health-questions-vector",
         embedding_service=None,
@@ -26,7 +27,7 @@ class SearchService:
         self.es_client = es_client or Elasticsearch("http://localhost:9200")
         self.index_name = index_name
         self.embedding_service = embedding_service or EmbeddingService()
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger if logger is not None else logging.getLogger(__name__)
 
     def search(self, query, top_n=5):
         """

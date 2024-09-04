@@ -81,3 +81,5 @@ ElasticSearch - Vector {'hit_rate': 0.9184, 'mrr': 0.7592866666666654}
 
 HNSW: This is an efficient ANN algorithm that provides a good trade-off between search speed and accuracy. You can enable it by setting "method": "hnsw" in your knn query. -> Almost no uplift compared to regular knn, will not apply.
 - 
+
+source .env to refresh the env variables

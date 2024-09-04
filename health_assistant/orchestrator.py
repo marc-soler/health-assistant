@@ -20,7 +20,7 @@ class QueryOrchestrator:
         llm_service (LLMService): The LLM service used to query the language model.
     """
 
-    def __init__(self, es_client, llm_service):
+    def __init__(self, logger, es_client, llm_service):
         """
         Initializes the QueryOrchestrator with the given Elasticsearch client and LLM service.
 
@@ -30,6 +30,7 @@ class QueryOrchestrator:
         """
         self.es_client = es_client
         self.llm_service = llm_service
+        self.logger = logger
 
     def process_query(self, question):
         """
@@ -43,7 +44,7 @@ class QueryOrchestrator:
             tuple: A tuple containing the LLM's response and the token statistics from the query.
         """
         # Search the Elasticsearch index with the user's question
-        search_service = SearchService(es_client=self.es_client)
+        search_service = SearchService(logger=self.logger, es_client=self.es_client)
         search_results = search_service.search(query=question)
 
         # Build the prompt using search results and provided context
@@ -70,7 +71,7 @@ class EvaluationOrchestrator:
         llm_service (LLMService): The LLM service used to query the language model for evaluation.
     """
 
-    def __init__(self, llm_service):
+    def __init__(self, logger, llm_service):
         """
         Initializes the EvaluationOrchestrator with the given LLM service.
 
@@ -78,6 +79,7 @@ class EvaluationOrchestrator:
             llm_service (LLMService): The LLM service used to query the language model for evaluation.
         """
         self.llm_service = llm_service
+        self.logger = logger
 
     def evaluate_response(self, question, answer):
         """
@@ -91,6 +93,7 @@ class EvaluationOrchestrator:
             tuple: A tuple containing the evaluation result (a dictionary) and the token statistics.
         """
         evaluator = ResponseEvaluator(
+            logger=self.logger,
             llm_service=self.llm_service,
             prompt_builder=PromptBuilder(templates.EVALUATION_PROMPT_TEMPLATE),
         )
@@ -152,11 +155,11 @@ class CostCalculationOrchestrator:
         cost_calculator (CostCalculator): The cost calculator used to determine the OpenAI API cost.
     """
 
-    def __init__(self):
+    def __init__(self, logger):
         """
         Initializes the CostCalculationOrchestrator with a CostCalculator.
         """
-        self.cost_calculator = CostCalculator()
+        self.cost_calculator = CostCalculator(logger=logger)
 
     def calculate_cost(self, token_stats):
         """
@@ -178,22 +181,25 @@ class MainOrchestrator:
         logger_setup = LoggerSetup()
         self.logger = logger_setup.get_logger()
 
-        self.db_manager = DatabaseManager()
+        self.db_manager = DatabaseManager(logger=self.logger)
+        self.db_manager.init_db()
 
-        indexer = ElasticsearchIndexer()
+        indexer = ElasticsearchIndexer(logger=self.logger)
         self.es_client, self.index_name = indexer.load_and_index_data()
 
-        self.llm_service = LLMService()
+        self.llm_service = LLMService(logger=self.logger)
         self.llm_service.connect_to_llm()
 
         self.query_orchestrator = QueryOrchestrator(
-            es_client=self.es_client, llm_service=self.llm_service
+            logger=self.logger, es_client=self.es_client, llm_service=self.llm_service
         )
         self.evaluation_orchestrator = EvaluationOrchestrator(
-            llm_service=self.llm_service
+            logger=self.logger, llm_service=self.llm_service
         )
         self.feedback_orchestrator = FeedbackOrchestrator(db_manager=self.db_manager)
-        self.cost_calculation_orchestrator = CostCalculationOrchestrator()
+        self.cost_calculation_orchestrator = CostCalculationOrchestrator(
+            logger=self.logger
+        )
 
     def run(self, question):
         conversation_id = str(uuid.uuid4())

@@ -9,12 +9,12 @@ class LLMService:
     It handles the connection to the LLM API and sending queries to retrieve responses.
     """
 
-    def __init__(self):
+    def __init__(self, logger=None):
         """
         Initializes the LLMService by retrieving the API key from environment variables and setting up the OpenAI client.
         """
         self.api_key = os.getenv("OPENAI_API_KEY")
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger if logger is not None else logging.getLogger(__name__)
 
         if not self.api_key:
             self.logger.error("OPENAI_API_KEY environment variable not set.")

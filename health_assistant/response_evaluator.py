@@ -11,7 +11,11 @@ class ResponseEvaluator:
     """
 
     def __init__(
-        self, llm_service=None, prompt_builder=None, evaluation_prompt_template=None
+        self,
+        logger=None,
+        llm_service=None,
+        prompt_builder=None,
+        evaluation_prompt_template=None,
     ):
         """
         Initializes the ResponseEvaluator with an instance of LLMService and a PromptBuilder.
@@ -25,7 +29,7 @@ class ResponseEvaluator:
         self.prompt_builder = prompt_builder or PromptBuilder(
             template=evaluation_prompt_template
         )
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger if logger is not None else logging.getLogger(__name__)
 
     def evaluate_relevance(self, question, answer):
         """

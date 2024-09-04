@@ -5,7 +5,7 @@ import elasticsearch
 
 
 class ElasticsearchIndexer:
-    def __init__(self, data_path=None, es_host="http://localhost:9200"):
+    def __init__(self, logger=None, data_path=None, es_host="http://localhost:9200"):
         """
         Initializes the ElasticsearchIndexer with the data path and Elasticsearch host.
         """
@@ -14,7 +14,7 @@ class ElasticsearchIndexer:
         )
         self.es_client = elasticsearch.Elasticsearch(es_host)
         self.index_name = "health-questions-vector"
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger if logger is not None else logging.getLogger(__name__)
 
     def load_data(self):
         """

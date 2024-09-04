@@ -12,6 +12,7 @@ RUN_TIMEZONE_CHECK = os.getenv("RUN_TIMEZONE_CHECK", "1") == "1"
 class DatabaseManager:
     def __init__(
         self,
+        logger=None,
         host=None,
         database=None,
         user=None,
@@ -22,12 +23,12 @@ class DatabaseManager:
         Initializes the DatabaseManager with connection details and timezone information.
         """
         self._host = host or os.getenv("POSTGRES_HOST", "postgres")
-        self._database = database or os.getenv("POSTGRES_DB", "course_assistant")
-        self._user = user or os.getenv("POSTGRES_USER", "your_username")
-        self._password = password or os.getenv("POSTGRES_PASSWORD", "your_password")
+        self._database = database or os.getenv("POSTGRES_DB", "health_assistant")
+        self._user = user or os.getenv("POSTGRES_USER", "admin")
+        self._password = password or os.getenv("POSTGRES_PASSWORD", "admin")
         self._tz = ZoneInfo(tz_info or os.getenv("TZ", "Europe/Berlin"))
         self._conn = self._get_db_connection()
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger if logger is not None else logging.getLogger(__name__)
 
         self.logger.info(
             f"DatabaseManager initialized with DB: {self._database}, Host: {self._host}"
