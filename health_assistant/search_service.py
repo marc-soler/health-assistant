@@ -24,10 +24,10 @@ class SearchService:
             index_name (str, optional): The name of the Elasticsearch index to search. Defaults to "health-questions-vector".
             embedding_service (EmbeddingService, optional): An instance of EmbeddingService to generate query embeddings.
         """
-        self.es_client = es_client or Elasticsearch("http://localhost:9200")
+        self.logger = logger if logger is not None else logging.getLogger(__name__)
+        self.es_client = es_client or Elasticsearch("http://elasticsearch:9200")
         self.index_name = index_name
         self.embedding_service = embedding_service or EmbeddingService()
-        self.logger = logger if logger is not None else logging.getLogger(__name__)
 
     def search(self, query, top_n=5):
         """

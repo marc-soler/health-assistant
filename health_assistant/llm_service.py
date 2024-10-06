@@ -60,7 +60,7 @@ class LLMService:
             RuntimeError: If the query to the LLM API fails.
         """
         try:
-            self.logger.info(f"Sending query to LLM with prompt: {prompt}")
+            self.logger.info(f"Sending query to LLM")
             response = self.openai_client.chat.completions.create(
                 model=model, messages=[{"role": "user", "content": prompt}]
             )
@@ -78,3 +78,10 @@ class LLMService:
         except Exception as e:
             self.logger.error(f"Failed to query the LLM: {e}")
             raise RuntimeError(f"Failed to query the LLM: {e}")
+
+    def close_llm_client(self):
+        """
+        Closes the LLM client.
+        """
+        self.openai_client.close()
+        self.logger.info("LLM client closed.")

@@ -8,7 +8,7 @@ class EmbeddingService:
     a pre-trained sentence transformer model.
     """
 
-    def __init__(self, model_name="Alibaba-NLP/gte-large-en-v1.5"):
+    def __init__(self, logger=None, model_name="Alibaba-NLP/gte-large-en-v1.5"):
         """
         Initializes the EmbeddingService with a specific sentence transformer model.
 
@@ -18,7 +18,7 @@ class EmbeddingService:
         self.model = SentenceTransformer(model_name, trust_remote_code=True)
         self.model.max_seq_length = 1024
         self.model.tokenizer.padding_side = "right"
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger if logger is not None else logging.getLogger(__name__)
 
     def embed_query(self, query):
         """

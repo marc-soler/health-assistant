@@ -16,12 +16,19 @@ services:
     container_name: elasticsearch
     environment:
       - discovery.type=single-node
+      - action.auto_create_index=false
       - xpack.security.enabled=false
     ports:
       - "9200:9200"
       - "9300:9300"
     volumes:
       - elasticsearch_data:/var/lib/elasticsearch/data
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"'" ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   app:
     build:
@@ -29,7 +36,7 @@ services:
       dockerfile: Dockerfile
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      DATA_PATH: ${DATA_PATH:-data/medquad_embeddings.parquet}
+      DATA_PATH: ${DATA_PATH}
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -38,6 +45,7 @@ services:
       - "${APP_PORT:-8501}:8501"
     depends_on:
       - postgres
+      - elasticsearch
 
   grafana:
     image: grafana/grafana:latest

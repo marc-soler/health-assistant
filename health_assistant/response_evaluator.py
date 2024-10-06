@@ -44,7 +44,9 @@ class ResponseEvaluator:
         """
         # Use the PromptBuilder to construct the evaluation prompt
         try:
-            prompt = self.prompt_builder.build_prompt(question=question, answer=answer)
+            prompt = self.prompt_builder.build_prompt(
+                question=question, answer_llm=answer
+            )
             self.logger.info("Evaluating relevance with generated prompt.")
         except ValueError as e:
             self.logger.error(f"Error building prompt: {e}")

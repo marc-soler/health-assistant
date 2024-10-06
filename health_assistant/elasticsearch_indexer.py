@@ -5,12 +5,14 @@ import elasticsearch
 
 
 class ElasticsearchIndexer:
-    def __init__(self, logger=None, data_path=None, es_host="http://localhost:9200"):
+    def __init__(
+        self, logger=None, data_path=None, es_host="http://elasticsearch:9200"
+    ):
         """
         Initializes the ElasticsearchIndexer with the data path and Elasticsearch host.
         """
         self.data_path = data_path or os.getenv(
-            "DATA_PATH", "../data/medquad_embeddings.parquet"
+            "DATA_PATH", "data/medquad_embeddings.parquet"
         )
         self.es_client = elasticsearch.Elasticsearch(es_host)
         self.index_name = "health-questions-vector"
@@ -66,13 +68,18 @@ class ElasticsearchIndexer:
         }
 
         try:
-            self.es_client.indices.delete(
-                index=self.index_name, ignore_unavailable=True
-            )
-            self.es_client.indices.create(
-                index=self.index_name, body=es_vector_index_settings
-            )
-            self.logger.info(f"Created Elasticsearch index: {self.index_name}")
+            # self.es_client.indices.delete(
+            #     index=self.index_name, ignore_unavailable=True
+            # )
+            if not self.es_client.indices.exists(index=self.index_name):
+                self.es_client.indices.create(
+                    index=self.index_name, body=es_vector_index_settings
+                )
+                self.logger.info(f"Created Elasticsearch index: {self.index_name}")
+            else:
+                self.logger.info(
+                    f"Elasticsearch index already exists, skipping creation: {self.index_name}"
+                )
         except Exception as e:
             self.es_client.close()
             self.logger.error(f"Failed to create index {self.index_name}: {e}")
@@ -94,6 +101,13 @@ class ElasticsearchIndexer:
         """
         documents = self.load_data()
         self.create_index()
-        self.index_documents(documents)
-        self.es_client.close()
+        index_count = self.es_client.count(index=self.index_name)["count"]
+        self.logger.info(f"Index count: {index_count}")
+        if index_count == 0:
+            self.logger.info(f"Indexing {len(documents)} documents into Elasticsearch.")
+            self.index_documents(documents)
+        else:
+            self.logger.info(
+                "Elasticsearch index already contains data, skipping indexing."
+            )
         return self.es_client, self.index_name

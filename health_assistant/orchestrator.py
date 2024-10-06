@@ -1,4 +1,6 @@
 import uuid
+from time import time
+
 from logging_setup import LoggerSetup
 from database_manager import DatabaseManager
 from elasticsearch_indexer import ElasticsearchIndexer
@@ -20,7 +22,7 @@ class QueryOrchestrator:
         llm_service (LLMService): The LLM service used to query the language model.
     """
 
-    def __init__(self, logger, es_client, llm_service):
+    def __init__(self, logger, search_service, llm_service):
         """
         Initializes the QueryOrchestrator with the given Elasticsearch client and LLM service.
 
@@ -28,9 +30,9 @@ class QueryOrchestrator:
             es_client (Elasticsearch): The Elasticsearch client used for searching the index.
             llm_service (LLMService): The LLM service used to query the language model.
         """
-        self.es_client = es_client
-        self.llm_service = llm_service
         self.logger = logger
+        self.search_service = search_service
+        self.llm_service = llm_service
 
     def process_query(self, question):
         """
@@ -44,8 +46,7 @@ class QueryOrchestrator:
             tuple: A tuple containing the LLM's response and the token statistics from the query.
         """
         # Search the Elasticsearch index with the user's question
-        search_service = SearchService(logger=self.logger, es_client=self.es_client)
-        search_results = search_service.search(query=question)
+        search_results = self.search_service.search(query=question)
 
         # Build the prompt using search results and provided context
         question_prompt_builder = PromptBuilder(templates.QUESTION_PROMPT_TEMPLATE)
@@ -78,8 +79,8 @@ class EvaluationOrchestrator:
         Args:
             llm_service (LLMService): The LLM service used to query the language model for evaluation.
         """
-        self.llm_service = llm_service
         self.logger = logger
+        self.llm_service = llm_service
 
     def evaluate_response(self, question, answer):
         """
@@ -128,7 +129,6 @@ class FeedbackOrchestrator:
             additional_feedback (str): Optional additional feedback provided by the user.
         """
         # Convert the feedback to a numerical value for storage
-        # TODO adapt to feedback format of the app
         feedback_value = 1 if feedback == "Like" else -1
 
         # Save the feedback to the database
@@ -182,16 +182,22 @@ class MainOrchestrator:
         self.logger = logger_setup.get_logger()
 
         self.db_manager = DatabaseManager(logger=self.logger)
-        self.db_manager.init_db()
+        self._initialize_db_once()
 
-        indexer = ElasticsearchIndexer(logger=self.logger)
-        self.es_client, self.index_name = indexer.load_and_index_data()
+        self.indexer = ElasticsearchIndexer(logger=self.logger)
+        self.es_client, self.index_name = self.indexer.load_and_index_data()
+
+        self.search_service = SearchService(
+            logger=self.logger, es_client=self.indexer.es_client
+        )
 
         self.llm_service = LLMService(logger=self.logger)
         self.llm_service.connect_to_llm()
 
         self.query_orchestrator = QueryOrchestrator(
-            logger=self.logger, es_client=self.es_client, llm_service=self.llm_service
+            logger=self.logger,
+            search_service=self.search_service,
+            llm_service=self.llm_service,
         )
         self.evaluation_orchestrator = EvaluationOrchestrator(
             logger=self.logger, llm_service=self.llm_service
@@ -201,8 +207,17 @@ class MainOrchestrator:
             logger=self.logger
         )
 
+    def _initialize_db_once(self):
+        """Initialize the database only if it hasn't been initialized before."""
+        if not self.db_manager.is_db_initialized():
+            self.db_manager.init_db()
+        else:
+            if self.logger is not None:
+                self.logger.info("Database already initialized.")
+
     def run(self, question):
         conversation_id = str(uuid.uuid4())
+        t0 = time()
 
         # Process the query and get the response
         response, token_stats = self.query_orchestrator.process_query(question)
@@ -211,17 +226,45 @@ class MainOrchestrator:
         evaluation_response, token_stats_evaluation = (
             self.evaluation_orchestrator.evaluate_response(question, response)
         )
+        t1 = time()
+        took = t1 - t0
 
         # Calculate the cost
         cost_rag = self.cost_calculation_orchestrator.calculate_cost(token_stats)
         cost_evaluation = self.cost_calculation_orchestrator.calculate_cost(
             token_stats_evaluation
         )
-        total_cost = cost_rag + cost_evaluation
+        openai_cost = cost_rag + cost_evaluation
 
         # Save the conversation to the database
+        answer_data = {
+            "answer": response,
+            "model_used": "gpt-4o-mini",
+            "response_time": took,
+            "relevance": evaluation_response.get("Relevance", "UNKNOWN"),  # type: ignore
+            "relevance_explanation": evaluation_response.get(  # type: ignore
+                "Explanation", "Failed to parse evaluation"
+            ),
+            "prompt_tokens": token_stats["prompt_tokens"],
+            "completion_tokens": token_stats["completion_tokens"],
+            "total_tokens": token_stats["total_tokens"],
+            "eval_prompt_tokens": token_stats_evaluation["prompt_tokens"],  # type: ignore
+            "eval_completion_tokens": token_stats_evaluation["completion_tokens"],  # type: ignore
+            "eval_total_tokens": token_stats_evaluation["total_tokens"],  # type: ignore
+            "openai_cost": openai_cost,
+        }
         self.db_manager.save_conversation(
-            conversation_id=conversation_id, question=question, answer=response
+            conversation_id=conversation_id, question=question, answer=answer_data
         )
 
-        return conversation_id, response, evaluation_response, total_cost
+        return conversation_id, response, evaluation_response, openai_cost
+
+    def close_rag(self):
+        """
+        Closes any initialised connections: Postgres database, Elasticsearch, and LLM client.
+        """
+        self.db_manager.close_connection()
+        self.es_client.close()
+        self.llm_service.close_llm_client()
+        if self.logger is not None:
+            self.logger.info("RAD system connections closed.")
