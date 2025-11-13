@@ -1,4 +1,4 @@
-# Health Assistant
+# RuralCare AI
 RAG system dedicated to answering health-related questions based on scientific evidence.
 
 <p align="center">
